@@ -9,6 +9,9 @@ from .models import System, Process
 from .serializers import ProcessSerializer
 from rest_framework.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -63,30 +66,47 @@ class ProcessFilterAPIView(ListAPIView):
     serializer_class = ProcessSerializer
 
     def parse_time_string(self, time_string):
-        today = datetime.today().date()  # Current date (e.g., 2024-12-15)
-        return datetime.strptime(f"{today} {time_string}", "%Y-%m-%d %H:%M:%S")
+        """Convert time string to an aware datetime object, assuming the same day."""
+        today = datetime.today().date()
+        naive_time = datetime.strptime(f"{today} {time_string}", "%Y-%m-%d %H:%M:%S")
+        aware_time = timezone.make_aware(naive_time, timezone.get_default_timezone())
+        return aware_time
 
     def get_queryset(self):
         start_time_str = self.request.GET.get('start_time')
         end_time_str = self.request.GET.get('end_time')
 
+        filters = Q() 
+
         if start_time_str:
             start_time = self.parse_time_string(start_time_str)
+            filters &= Q(timestamp__gte=start_time)
+
         if end_time_str:
             end_time = self.parse_time_string(end_time_str)
+            filters &= Q(timestamp__lte=end_time)
 
 
         # Apply optional time filters
-        if start_time and end_time:
-            queryset = Process.objects.filter(timestamp__gte=start_time, timestamp__lte=end_time)
+        if filters:
+            queryset = Process.objects.filter(filters).select_related('system').values(
+                'id', 
+                'system__name', 
+                'name',         
+                'pid', 
+                'timestamp', 
+                'cpu_percent', 
+                'memory_percent'
+            )
+
 
         return queryset
 
     def list(self, request, *args, **kwargs):
         try:
             queryset = self.get_queryset()
-            serializer = self.get_serializer(queryset, many=True)
-            return Response({'success': True, 'data': serializer.data},status=status.HTTP_200_OK)
+            data = list(queryset)
+            return Response({'success': True, 'data': data, 'count': queryset.count()},status=status.HTTP_200_OK)
         except ValidationError as e:
             return Response({"success":False, "message":str(e)}, status_code=status.HTTP_400_BAD_REQUEST)
 
