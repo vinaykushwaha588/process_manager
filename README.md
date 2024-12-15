@@ -7,36 +7,59 @@ A Django-based application for monitoring and managing system process data. The 
 ## Features
 
 - Submit process data.
-- Filter data by system name and time.
+- Filter data by start and end time.
+- Calculate the duration of a specific process.
 - Robust error handling.
 
 ---
 
 ## Installation
+### Step 1: Setting up a Virtual Environment
 
-1. Clone the repository:
+1. **Create a virtual environment** in the project directory:
 
+    For Windows & Linux
     ```bash
-    git clone <repository-url>
-    cd <repository-directory>
+    python3 -m venv venv
+    ```
+    
+2. **Activate the virtual environment**:
+
+    For Windows:
+    ```bash
+    .\venv\Scripts\activate
     ```
 
-2. Install dependencies:
+    For Linux:
+    ```bash
+    source venv/bin/activate
+    ```
+
+
+3. Clone the repository:
+
+    ```bash
+    git https://github.com/vinaykushwaha588/process_manager.git
+    cd process_manager
+    ```
+
+4. Install dependencies:
 
     ```bash
     pip install -r requirements.txt
     ```
 
-3. Apply migrations:
+5. Apply migrations & migrate: if required.
 
     ```bash
+    python manage.py makemigrations
     python manage.py migrate
     ```
 
-4. Run the Django server:
+6. Run the Django server:
 
     ```bash
-    python manage.py runserver
+    python manage.py runserver 0.0.0.0:8000
     ```
 
 ---
@@ -45,7 +68,7 @@ A Django-based application for monitoring and managing system process data. The 
 
 After starting the Django server, you need to monitor the system processes in real-time. To do this, follow these steps:
 
-1. Open a new terminal window.
+1. Open a new terminal window. in the same directory.
 2. Run the process monitor script:
 
     ```bash
@@ -68,8 +91,8 @@ This script collects and submits process data from your system to the API.
     {
         "system_name": "System_A",
         "processes": [
-            {"pid": 1234, "name": "python", "cpu_percent": 5.2, "memory": 1.5},
-            {"pid": 5678, "name": "chrome", "cpu_percent": 15.7, "memory": 8.3}
+            {"pid": 1234, "name": "python", "cpu_percent": 5.2, "memory_percent": 1.5},
+            {"pid": 5678, "name": "chrome", "cpu_percent": 15.7, "memory_percent": 8.3}
         ]
     }
     ```
@@ -79,11 +102,25 @@ This script collects and submits process data from your system to the API.
 - **Endpoint**: `/api/process-filter/`
 - **Method**: `GET`
 - **Query Parameters**:
-    - `system_name` (required)
-    - `start_time` (optional, format: `HH:MM:SS`)
-    - `end_time` (optional, format: `HH:MM:SS`)
+    - `start_time` (format: `HH:MM:SS`)
+    - `end_time` (format: `HH:MM:SS`)
 
 Example:
 
 ```bash
-GET /api/process-filter/?system_name=System_A&start_time=09:00:00&end_time=17:00:00
+GET {{url}}/api/filter-processes/?start_time=00:30:00&end_time=01:05:00
+
+
+### Process Durations Specific process
+
+- **Endpoint**: `/api/process-duration/`
+- **Method**: `GET`
+- **Query Parameters**:
+    - `system_name` (required: ``)
+    - `process_name` (required: ``)
+
+Example:
+
+```bash
+GET {{url}}/api/process-duration/?system_name=Vinay&process_name=Code.exe
+
