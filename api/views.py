@@ -88,16 +88,20 @@ class ProcessFilterAPIView(ListAPIView):
 
 
         # Apply optional time filters
+        queryset = Process.objects.all().select_related('system').values(
+            'id', 
+            'system__name', 
+            'name',         
+            'pid', 
+            'timestamp', 
+            'cpu_percent', 
+            'memory_percent'
+        )
+
         if filters:
-            queryset = Process.objects.filter(filters).select_related('system').values(
-                'id', 
-                'system__name', 
-                'name',         
-                'pid', 
-                'timestamp', 
-                'cpu_percent', 
-                'memory_percent'
-            )
+            queryset = queryset.filter(filters)
+        
+        return queryset
 
 
         return queryset
