@@ -103,9 +103,6 @@ class ProcessFilterAPIView(ListAPIView):
         
         return queryset
 
-
-        return queryset
-
     def list(self, request, *args, **kwargs):
         try:
             queryset = self.get_queryset()
