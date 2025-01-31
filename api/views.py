@@ -107,10 +107,28 @@ class ProcessFilterAPIView(ListAPIView):
             end_time = self.parse_time_string(end_time_str)
             filters &= Q(timestamp__lte=end_time)
 
+<<<<<<< HEAD
         queryset = Process.objects.all().select_related('system')  # Ensure 'system' is included
         if filters:
             queryset = queryset.filter(filters)
 
+=======
+
+        # Apply optional time filters
+        queryset = Process.objects.all().select_related('system').values(
+            'id', 
+            'system__name', 
+            'name',         
+            'pid', 
+            'timestamp', 
+            'cpu_percent', 
+            'memory_percent'
+        )
+
+        if filters:
+            queryset = queryset.filter(filters)
+        
+>>>>>>> 100eb96aef77023ce1b42ab542b6b5faac857829
         return queryset
 
     def list(self, request, *args, **kwargs):
