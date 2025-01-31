@@ -43,6 +43,6 @@ def send_process_info():
         except Exception as e:
             print(f"Failed to send data: {e}")
         time.sleep(5)  # Wait for 5 seconds before sending data again
-
+        
 if __name__ == "__main__":
     send_process_info()

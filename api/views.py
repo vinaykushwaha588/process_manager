@@ -8,13 +8,33 @@ from django.db.models import Min
 from .models import System, Process
 from .serializers import ProcessSerializer
 from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from datetime import datetime
+from django.http import JsonResponse
 import logging
+import json
+"""cache"""
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_cookie, vary_on_headers
+from django.core.cache import cache
+import redis
+
 
 logger = logging.getLogger(__name__)
+
+# ✅ Use Django's default Redis connection
+redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
+
+
+class LargeResultsSetPagination(PageNumberPagination):
+    """Custom pagination to handle large dataset efficiently."""
+    page_size = 1000  
+    page_size_query_param = 'page_size'
+    max_page_size = 10000 
 
 
 class ProcessDataAPIView(CreateAPIView):
@@ -64,6 +84,7 @@ class ProcessFilterAPIView(ListAPIView):
         API to fetch process data for a specific system with optional time filters.
     """
     serializer_class = ProcessSerializer
+    pagination_class = LargeResultsSetPagination
 
     def parse_time_string(self, time_string):
         """Convert time string to an aware datetime object, assuming the same day."""
@@ -86,29 +107,37 @@ class ProcessFilterAPIView(ListAPIView):
             end_time = self.parse_time_string(end_time_str)
             filters &= Q(timestamp__lte=end_time)
 
-
-        # Apply optional time filters
+        queryset = Process.objects.all().select_related('system')  # Ensure 'system' is included
         if filters:
-            queryset = Process.objects.filter(filters).select_related('system').values(
-                'id', 
-                'system__name', 
-                'name',         
-                'pid', 
-                'timestamp', 
-                'cpu_percent', 
-                'memory_percent'
-            )
-
+            queryset = queryset.filter(filters)
 
         return queryset
 
     def list(self, request, *args, **kwargs):
         try:
+            # Generate cache key based on filters
+            cache_key = f"process_data_{request.GET.get('start_time', '')}_{request.GET.get('end_time', '')}"
+            
+            cached_data = redis_client.get(cache_key)
+            
+            if cached_data:
+                if isinstance(cached_data, bytes):
+                    cached_data = cached_data.decode('utf-8')  # Decode bytes to string if necessary
+                
+                cached_data = json.loads(cached_data) 
+                paginated_data = self.paginate_queryset(cached_data) 
+                return self.get_paginated_response({'success': True, 'data': paginated_data})
+            
             queryset = self.get_queryset()
-            data = list(queryset)
-            return Response({'success': True, 'data': data, 'count': queryset.count()},status=status.HTTP_200_OK)
+            paginated_queryset = self.paginate_queryset(queryset)
+
+            serialized_data = self.get_serializer(paginated_queryset, many=True).data
+            redis_client.set(cache_key, json.dumps(serialized_data), ex=60 * 60 * 2)   # Cache for 2 hours
+
+            return self.get_paginated_response({'success': True, 'data': serialized_data})
+
         except ValidationError as e:
-            return Response({"success":False, "message":str(e)}, status_code=status.HTTP_400_BAD_REQUEST)
+            return Response({"success": False, "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # Process Duration Calculation
@@ -149,3 +178,13 @@ class ProcessDurationAPIView(APIView):
             "success": False,
             "message": "No process found with the specified name on the system."
         }, status=status.HTTP_404_NOT_FOUND)
+
+from rest_framework.decorators import api_view
+@api_view(['GET'])
+def clear_cache(request):
+    try:
+        redis_client.flushdb()
+        return JsonResponse({"message": "Cache cleared successfully!"}, status=200)
+
+    except Exception as e:
+        return JsonResponse({"message": str(e)}, status=500)
